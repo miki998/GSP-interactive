@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 from  PIL import Image
 
 #Add a logo (optional) in the sidebar
-logo = Image.open(r'/Users/mikichan/Desktop/logo_gsp.png')
+logo = Image.open(r'./resources/logo_gsp.png')
 st.sidebar.image(logo,  width=120)
 
 #Add the expander to provide some information about the app
