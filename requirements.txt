@@ -1,0 +1,8 @@
+numpy
+pandas
+Pillow
+
+plotly
+networkx
+streamlit
+
