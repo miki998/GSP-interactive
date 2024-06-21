@@ -5,114 +5,35 @@ TBMODIFIED but originally written by
 """
 
 import streamlit as st
-import pandas as pd
-import numpy as np
-import networkx as nx
+import plotly.express as px
 import plotly.graph_objs as go
-from  PIL import Image
+import plotly.figure_factory as ff
+from plotly.subplots import make_subplots
 
-#Add a logo (optional) in the sidebar
-logo = Image.open(r'./resources/logo_gsp.png')
-st.sidebar.image(logo,  width=120)
 
-#Add the expander to provide some information about the app
-with st.sidebar.expander("About the App"):
-     st.write("""
-        This network graph app was built by My Data Talk using Streamlit and Plotly. You can use the app to quickly generate an interactive network graph with different layout choices.
-     """)
+from src import *
 
-#Add a file uploader to the sidebar
-uploaded_file = st.sidebar.file_uploader('',type=['csv']) #Only accepts csv file format
-
-#Add an app title. Use css to style the title
-st.markdown(""" <style> .font {                                          
-    font-size:30px ; font-family: 'Cooper Black'; color: #FF9633;} 
-    </style> """, unsafe_allow_html=True)
-st.markdown('<p class="font">Upload your data and generate an interactive network graph instantly...</p>', unsafe_allow_html=True)
-
-#Create the network graph using networkx
-if uploaded_file is not None:     
-    df=pd.read_csv(uploaded_file)  
-    A = list(df["Source"].unique())
-    B = list(df["Target"].unique())
-    node_list = set(A+B)
-    G = nx.Graph() #Use the Graph API to create an empty network graph object
-    
-    #Add nodes and edges to the graph object
-    for i in node_list:
-        G.add_node(i)
-    for i,j in df.iterrows():
-        G.add_edges_from([(j["Source"],j["Target"])])
- 
-    #Create three input widgets that allow users to specify their preferred layout and color schemes
-    col1, col2, col3 = st.columns( [1, 1, 1])
-    with col1:
-        layout= st.selectbox('Choose a network layout',('Random Layout','Spring Layout','Shell Layout','Kamada Kawai Layout','Spectral Layout'))
-    with col2:
-        color=st.selectbox('Choose color of the nodes', ('Blue','Red','Green','Orange','Red-Blue','Yellow-Green-Blue'))      
-    with col3:
-        title=st.text_input('Add a chart title')
-
-    #Get the position of each node depending on the user' choice of layout
-    if layout=='Random Layout':
-        pos = nx.random_layout(G) 
-    elif layout=='Spring Layout':
-        pos = nx.spring_layout(G, k=0.5, iterations=50)
-    elif  layout=='Shell Layout':
-        pos = nx.shell_layout(G)            
-    elif  layout=='Kamada Kawai Layout':
-        pos = nx.kamada_kawai_layout(G) 
-    elif  layout=='Spectral Layout':
-        pos = nx.spectral_layout(G) 
-
-    #Use different color schemes for the node colors depending on the user input
-    if color=='Blue':
-        colorscale='blues'    
-    elif color=='Red':
-        colorscale='reds'
-    elif color=='Green':
-        colorscale='greens'
-    elif color=='Orange':
-        colorscale='orange'
-    elif color=='Red-Blue':
-        colorscale='rdbu'
-    elif color=='Yellow-Green-Blue':
-        colorscale='YlGnBu'
-
-    #Add positions of nodes to the graph
-    for n, p in pos.items():
-        G.nodes[n]['pos'] = p
-
+def prepare_trace(G, signal):
     #Use plotly to visualize the network graph created using NetworkX
     #Adding edges to plotly scatter plot and specify mode='lines'
-    edge_trace = go.Scatter(
-        x=[],
-        y=[],
-        line=dict(width=1,color='#888'),
-        hoverinfo='none',
-        mode='lines')
-
+    edge_trace = go.Scatter(x=[], y=[], line=dict(width=1,color='#888'), 
+                            hoverinfo='none', mode='lines')
     for edge in G.edges():
         x0, y0 = G.nodes[edge[0]]['pos']
         x1, y1 = G.nodes[edge[1]]['pos']
         edge_trace['x'] += tuple([x0, x1, None])
         edge_trace['y'] += tuple([y0, y1, None])
-    
+
     #Adding nodes to plotly scatter plot
-    node_trace = go.Scatter(
-        x=[],
-        y=[],
-        text=[],
-        mode='markers',
-        hoverinfo='text',
+    node_trace = go.Scatter(x=[],y=[],text=[],mode='markers',hoverinfo='text',
         marker=dict(
             showscale=True,
-            colorscale=colorscale, #The color scheme of the nodes will be dependent on the user's input
+            colorscale='thermal', #The color scheme of the nodes will be dependent on the user's input
             color=[],
             size=20,
             colorbar=dict(
                 thickness=10,
-                title='# Connections',
+                title='# Signal Strength',
                 xanchor='left',
                 titleside='right'
             ),
@@ -124,20 +45,72 @@ if uploaded_file is not None:
         node_trace['y'] += tuple([y])
 
     for node, adjacencies in enumerate(G.adjacency()):
-        node_trace['marker']['color']+=tuple([len(adjacencies[1])]) #Coloring each node based on the number of connections
-        node_info = str(adjacencies[0]) +' # of connections: '+str(len(adjacencies[1]))
+        node_trace['marker']['color']+=tuple([signal[adjacencies[0]]]) #Coloring each node based on the number of connections
+        node_info = 'node ' + str(adjacencies[0]) +' signal = '+str(np.round(signal[adjacencies[0]], 3))
         node_trace['text']+=tuple([node_info])
+
+    return edge_trace, node_trace
+
+uploaded_file = display()
+
+#Create the network graph using networkx
+if uploaded_file is not None:
+    A, pos, signal = load(uploaded_file)
+
+    G = nx.from_numpy_array(A, create_using=nx.MultiGraph)
+
+    if pos is None:
+        pos, U, coefs, V, eidx = ui_box(G, A, signal)
+    else:
+        _, U, coefs, V, eidx = ui_box(G, A, signal)
+    #Add positions of nodes to the graph
+    for n, p in pos.items():
+        G.nodes[n]['pos'] = p
+
+
+    edge_trace1, node_trace1 = prepare_trace(G, signal)
+    edge_trace2, node_trace2 = prepare_trace(G, U[:,eidx].real)
+
+    # Arranging Figures
+    fig1 = go.Figure(data=[edge_trace1, node_trace1],
+                layout=go.Layout())
     
-    #Plot the final figure
-    fig = go.Figure(data=[edge_trace, node_trace],
-                layout=go.Layout(
-                    title=title, #title takes input from the user
-                    title_x=0.45,
-                    titlefont=dict(size=25),
-                    showlegend=False,
-                    hovermode='closest',
-                    margin=dict(b=20,l=5,r=5,t=40),
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
+    fig2 = go.Figure(data=[edge_trace2, node_trace2],
+                layout=go.Layout())
+
+    fig = make_subplots(rows=1, cols=2,
+                        subplot_titles=("Original Graph", "Eigenmodes"))
+
+    for t in fig1.data:
+        fig.append_trace(t, row=1, col=1)
+    for t in fig2.data:
+        fig.append_trace(t, row=1, col=2)
+
+    fig.update_layout(height=500, width=800, title_text="Graph Analysis")
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=False)
+    fig.update_layout(showlegend=False)
 
     st.plotly_chart(fig, use_container_width=True) #Show the graph in streamlit
+
+
+    # Compute frequencies and associated magnitudes
+    freqs = []
+    mags = []
+    real_freqs = np.abs(V.imag) < 1e-10
+    for freqnb in range(len(coefs)):
+        # Add both the positive part and the negative part
+        if (real_freqs[freqnb] == 1):
+            freqs.append(-np.abs(V[freqnb]))
+            freqs.append(np.abs(V[freqnb]))
+            mags.append(np.abs(coefs[freqnb]))
+            mags.append(np.abs(coefs[freqnb]))
+    freqs = np.asarray(freqs)
+    mags = np.asarray(mags)
+
+    df = pd.DataFrame.from_dict({'frequencies': freqs,
+                                 'coefs': mags})
+
+    fig_distrib = px.bar(df, x='frequencies', y='coefs')
+    fig_distrib.update_layout(height=300, width=300, title_text="Signal Spectrum")
+    st.plotly_chart(fig_distrib, use_container_width=True) #Show the graph in streamlit
