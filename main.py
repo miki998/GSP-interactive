@@ -1,7 +1,5 @@
 """
 Copyright © 2024 Chun Hei Michael Chan, MIPLab EPFL
-TBMODIFIED but originally written by 
-->  https://towardsdatascience.com/build-a-simple-network-graph-app-using-streamlit-e6d65efbae88
 """
 
 import streamlit as st
@@ -13,104 +11,105 @@ from plotly.subplots import make_subplots
 
 from src import *
 
-def prepare_trace(G, signal):
-    #Use plotly to visualize the network graph created using NetworkX
-    #Adding edges to plotly scatter plot and specify mode='lines'
-    edge_trace = go.Scatter(x=[], y=[], line=dict(width=1,color='#888'), 
-                            hoverinfo='none', mode='lines')
-    for edge in G.edges():
-        x0, y0 = G.nodes[edge[0]]['pos']
-        x1, y1 = G.nodes[edge[1]]['pos']
-        edge_trace['x'] += tuple([x0, x1, None])
-        edge_trace['y'] += tuple([y0, y1, None])
-
-    #Adding nodes to plotly scatter plot
-    node_trace = go.Scatter(x=[],y=[],text=[],mode='markers',hoverinfo='text',
-        marker=dict(
-            showscale=True,
-            colorscale='thermal', #The color scheme of the nodes will be dependent on the user's input
-            color=[],
-            size=20,
-            colorbar=dict(
-                thickness=10,
-                title='# Signal Strength',
-                xanchor='left',
-                titleside='right'
-            ),
-            line=dict(width=0)))
-
-    for node in G.nodes():
-        x, y = G.nodes[node]['pos']
-        node_trace['x'] += tuple([x])
-        node_trace['y'] += tuple([y])
-
-    for node, adjacencies in enumerate(G.adjacency()):
-        node_trace['marker']['color']+=tuple([signal[adjacencies[0]]]) #Coloring each node based on the number of connections
-        node_info = 'node ' + str(adjacencies[0]) +' signal = '+str(np.round(signal[adjacencies[0]], 3))
-        node_trace['text']+=tuple([node_info])
-
-    return edge_trace, node_trace
-
 uploaded_file = display()
 
 #Create the network graph using networkx
 if uploaded_file is not None:
     A, pos, signal = load(uploaded_file)
 
+    if len(pos[0]) == 3:
+        prepare_trace = prepare_trace3d
+        _graphtype = "scene"
+    else:
+        prepare_trace = prepare_trace2d
+        _graphtype = "xy"
+
     G = nx.from_numpy_array(A, create_using=nx.MultiGraph)
 
-    if pos is None:
-        pos, U, coefs, V, eidx = ui_box(G, A, signal)
-    else:
-        _, U, coefs, V, eidx = ui_box(G, A, signal)
-    #Add positions of nodes to the graph
-    for n, p in pos.items():
-        G.nodes[n]['pos'] = p
+    fig = make_subplots(rows=2, cols=2, column_widths=[0.7, 0.3], horizontal_spacing = 0.,
+                        specs=[[{"type": _graphtype, "rowspan": 2}, {"type": _graphtype}],
+                               [None, {}]],
+                               subplot_titles=("Original Graph", "Eigenmodes", "Signal Spectrum"))
 
-
-    edge_trace1, node_trace1 = prepare_trace(G, signal)
-    edge_trace2, node_trace2 = prepare_trace(G, U[:,eidx].real)
-
-    # Arranging Figures
-    fig1 = go.Figure(data=[edge_trace1, node_trace1],
-                layout=go.Layout())
+    G, U, mags, freqs, eidx, edge_trace_template, node_trace_template, quiver_figure_template = ui_box(G, A, signal, pos, prepare_trace)
+    print("Magnitudes and Frequencies + Basis are generated ...")
     
-    fig2 = go.Figure(data=[edge_trace2, node_trace2],
-                layout=go.Layout())
 
-    fig = make_subplots(rows=1, cols=2,
-                        subplot_titles=("Original Graph", "Eigenmodes"))
-
-    for t in fig1.data:
-        fig.append_trace(t, row=1, col=1)
-    for t in fig2.data:
+    ### EIGENMODE PLOT ###
+    edge_trace_eig, node_trace_eig, quiver_figure_eig = prepare_trace(G, U[:,eidx].real, False,
+                                                   deepcopy(edge_trace_template), 
+                                                   deepcopy(node_trace_template),
+                                                   deepcopy(quiver_figure_template))
+    fig_eig = go.Figure(data=[edge_trace_eig, node_trace_eig])
+    for t in fig_eig.data:
         fig.append_trace(t, row=1, col=2)
+    # fig.append_trace(quiver_figure_eig.data[0], row=1, col=2)
 
-    fig.update_layout(height=500, width=800, title_text="Graph Analysis")
+
+    ### SIGNAL + SPECTRUM PLOT ###
+    if len(signal.shape) == 1: # STATIC
+        edge_trace, node_trace, quiver_figure = prepare_trace(G, signal, True,
+                                                edge_trace=deepcopy(edge_trace_template),
+                                                node_trace=deepcopy(node_trace_template),
+                                                quiver_figure=deepcopy(quiver_figure_template))
+        print("Traces are generated ...")
+        fig_signal = go.Figure(data=[edge_trace, node_trace])
+        for t in fig_signal.data:
+            fig.append_trace(t, row=1, col=1)
+        # fig.append_trace(quiver_figure.data[0], row=1, col=1)
+
+        fig.add_trace(go.Bar(x=freqs, y=mags), row=2, col=2)
+        fig.update_yaxes(range=[mags.min(), mags.max()], row=2, col=2)
+
+
+    else: # DYNAMIC
+        progress_text = "Pre-computing graphs' signals and displays ... Please wait."
+        my_bar = st.progress(0, text=progress_text)
+        for tidx in range(signal.shape[0]):
+            edge_trace, node_trace, quiver_figure = prepare_trace(G, signal[tidx], True, 
+                                                   edge_trace=deepcopy(edge_trace_eig), 
+                                                   node_trace=deepcopy(node_trace_eig), 
+                                                   vminmax=(signal.min(), signal.max()))
+            fig_signal = go.Figure(data=[edge_trace, node_trace])
+            for t in fig_signal.data:
+                fig.append_trace(t, row=1, col=1)
+            # fig.append_trace(quiver_figure.data[0], row=1, col=1)
+
+            fig.add_trace(go.Bar(x=freqs[tidx], y=mags[tidx]), row=2, col=2)
+            fig.update_yaxes(range=[mags.min(), mags.max()], row=2, col=2)
+
+            my_bar.progress(tidx/signal.shape[0], text=progress_text)
+        my_bar.empty()
+
+        for n in range(5,len(fig.data)):
+            fig.data[n].visible = False
+
+        # Slider
+        steps = []
+        for tidx in range(signal.shape[0]):
+            step = dict(
+                method="update",
+                args=[{"visible": [False] * len(fig.data)},
+                    {"title": "Slider switched to timepoint: " + str(tidx)}],  # layout attribute
+            )
+            for n in range(3):
+                step["args"][0]["visible"][n] = True  # Toggle eigenmode plot's trace to always visible
+
+            step["args"][0]["visible"][2+3*tidx] = True  # Toggle trace associated to timepoints tidx to "visible"
+            step["args"][0]["visible"][2+3*tidx+1] = True
+            step["args"][0]["visible"][2+3*tidx+2] = True
+            # step["args"][0]["visible"][2+3*tidx+3] = True
+            steps.append(step)
+
+        sliders = [dict(active=0, currentvalue={"prefix": "Timepoint: "},
+                        pad={"t": 50}, steps=steps)]
+        fig.update_layout(sliders=sliders)
+        print("Traces are generated ...")
+
+
+
+    fig.update_layout(height=700, width=800, title_text="Graph Analysis")
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=False)
     fig.update_layout(showlegend=False)
-
-    st.plotly_chart(fig, use_container_width=True) #Show the graph in streamlit
-
-
-    # Compute frequencies and associated magnitudes
-    freqs = []
-    mags = []
-    real_freqs = np.abs(V.imag) < 1e-10
-    for freqnb in range(len(coefs)):
-        # Add both the positive part and the negative part
-        if (real_freqs[freqnb] == 1):
-            freqs.append(-np.abs(V[freqnb]))
-            freqs.append(np.abs(V[freqnb]))
-            mags.append(np.abs(coefs[freqnb]))
-            mags.append(np.abs(coefs[freqnb]))
-    freqs = np.asarray(freqs)
-    mags = np.asarray(mags)
-
-    df = pd.DataFrame.from_dict({'frequencies': freqs,
-                                 'coefs': mags})
-
-    fig_distrib = px.bar(df, x='frequencies', y='coefs')
-    fig_distrib.update_layout(height=300, width=300, title_text="Signal Spectrum")
-    st.plotly_chart(fig_distrib, use_container_width=True) #Show the graph in streamlit
+    st.plotly_chart(fig, use_container_width=True)
