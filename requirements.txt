@@ -2,7 +2,7 @@ numpy
 pandas
 Pillow
 
-pickle
+pickle-mixin
 plotly
 networkx
 streamlit
