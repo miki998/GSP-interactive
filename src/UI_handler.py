@@ -1,4 +1,4 @@
-from .utils import *
+from .processes import *
 from .numerical_handler import graph_analysis
 import streamlit as st
 

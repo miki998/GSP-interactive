@@ -9,13 +9,11 @@ from tqdm import tqdm
 from copy import deepcopy
 from typing import Optional
 
-import torch
 import numpy as np
 from numpy.linalg import matrix_rank
 
 from math import comb
 import scipy.io as sio
-from sympy import Matrix
 from scipy.stats import zscore
 from scipy.stats import pearsonr
 
@@ -27,13 +25,7 @@ from matplotlib.pyplot import cm
 
 import networkx as nx
 
-import cv2
-import pandas as pd
-import seaborn as sns
-import netplotbrain
-
-from nilearn.plotting import plot_epi, show
-from nilearn.connectome import ConnectivityMeasure
+from  PIL import Image
 
 def save(pickle_filename:str, anything:Optional[np.ndarray]):
     """

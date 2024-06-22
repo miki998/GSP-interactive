@@ -2,7 +2,12 @@ numpy
 pandas
 Pillow
 
+pickle
 plotly
 networkx
 streamlit
+
+tqdm
+scipy
+matplotlib
 
