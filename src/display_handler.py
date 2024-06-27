@@ -1,5 +1,7 @@
 from .processes import *
 import streamlit as st
+
+import base64
 import plotly.graph_objs as go
 import plotly.figure_factory as ff
 
@@ -10,6 +12,8 @@ def display():
         <style>
         [data-testid="stSidebar"][aria-expanded="true"] > div:first-child{
             width: 350px;
+            height: 1000px;
+            margin-top: 0px;
         }
         [data-testid="stSidebar"][aria-expanded="false"] > div:first-child{
             width: 300px;
@@ -18,7 +22,23 @@ def display():
         
         """,
         unsafe_allow_html=True,
-        )    
+        )
+    # st.markdown("""
+    # <style>
+    #         .css-18e3th9 {
+    #             padding-top: 0rem;
+    #             padding-bottom: 10rem;
+    #             padding-left: 5rem;
+    #             padding-right: 5rem;
+    #         }
+    #         .css-1d391kg {
+    #             padding-top: 3.5rem;
+    #             padding-right: 1rem;
+    #             padding-bottom: 3.5rem;
+    #             padding-left: 1rem;
+    #         }
+    # </style>
+    # """, unsafe_allow_html=True)    
     #Add a logo (optional) in the sidebar
     logo = Image.open(r'./resources/logo_gsp.png')
     st.sidebar.image(logo,  width=300)
@@ -31,7 +51,7 @@ def display():
         """)
 
     #Add a file uploader to the sidebar
-    uploaded_file = st.sidebar.file_uploader('Option 1',type=['pkl']) #Only accepts csv file format
+    # uploaded_file = st.sidebar.file_uploader('Option 1',type=['pkl']) #Only accepts csv file format
     # uploaded_file = './resources/demo_data/macaque_data/interactivepack_macaque_dynamic.pkl'
     # uploaded_file = './resources/demo_data/macaque_data/interactivepack_macaque_static.pkl'
     # uploaded_file = './resources/demo_data/usa_graph/interactivepack_usa_static.pkl'
@@ -44,15 +64,46 @@ def display():
         uploaded_file = './resources/demo_data/macaque_data/interactivepack_macaque_dynamic.pkl'
     else:
         uploaded_file = None
+
+    st.sidebar.text("Copyright © 2024 Michael Chan\nMIPLab EPFL")
     #Add an app title. Use css to style the title
     st.markdown(""" <style> .font {                                          
         font-size:30px ; font-family: 'Cooper Black'; color: #FF9633;} 
         </style> """, unsafe_allow_html=True)
     st.markdown('<p class="font">Interactive GSP - #In a Nutshell</p>', unsafe_allow_html=True)
 
+    file_ = open("./resources/giphy.gif", "rb")
+    contents = file_.read()
+    data_url = base64.b64encode(contents).decode("utf-8")
+    file_.close()
+
+    st.sidebar.markdown(
+        f'<img src="data:image/gif;base64,{data_url}" alt="under-construction gif">',
+        unsafe_allow_html=True,
+    )
     return uploaded_file
 
-def prepare_trace2d(G, signal, colorbarflag=False, edge_trace=None, node_trace=None, quiver_figure=None, vminmax=None):
+def prepare_trace2d(G:nx.Graph, signal:np.ndarray, colorbarflag:bool=False, 
+                    edge_trace:Optional[go.Scatter]=None, node_trace:Optional[go.Scatter]=None, 
+                    quiver_figure:Optional[go.Scatter]=None, vminmax:tuple=None):
+    """
+    Pre-compute and prepare the displays for 2d plots to avoid recomputing the same thing over and over again when interacting with the app.
+    
+    Parameters
+    ----------
+    G (nx.Graph): The graph to be plotted.
+    signal (np.ndarray): The signal values associated with each node.
+    colorbarflag (bool, optional): Whether to include a colorbar in the plot.
+    edge_trace (go.Scatter, optional): The existing edge trace, if any.
+    node_trace (go.Scatter, optional): The existing node trace, if any.
+    quiver_figure (go.Scatter, optional): The existing quiver figure, if any.
+    vminmax (tuple, optional): The minimum and maximum values for the colorbar.
+    
+    Returns
+    -------
+    tuple: The updated edge trace, node trace, and quiver figure.
+    """
+
     # Use plotly to visualize the network graph created using NetworkX
     # Adding edges to plotly scatter plot and specify mode='lines'
     edge_trace = go.Scatter(x=[], y=[], line=dict(width=1,color='#888'), 
@@ -130,7 +181,27 @@ def prepare_trace2d(G, signal, colorbarflag=False, edge_trace=None, node_trace=N
     return edge_trace, node_trace, quiver_figure
 
 
-def prepare_trace3d(G, signal, colorbarflag=False, edge_trace=None, node_trace=None, quiver_figure=None, vminmax=None):
+def prepare_trace3d(G:nx.Graph, signal:np.ndarray, colorbarflag:bool=False, 
+                    edge_trace:Optional[go.Scatter]=None, node_trace:Optional[go.Scatter]=None, 
+                    quiver_figure:Optional[go.Scatter]=None, vminmax:tuple=None):
+    """
+    Prepare the traces for a 3D plot of a graph, including edges and nodes.
+    
+    Parameters
+    ----------
+        G (nx.Graph): The graph to be plotted.
+        signal (np.ndarray): The signal values associated with each node.
+        colorbarflag (bool, optional): Whether to include a colorbar in the plot.
+        edge_trace (go.Scatter3d, optional): The existing edge trace, if any.
+        node_trace (go.Scatter3d, optional): The existing node trace, if any.
+        quiver_figure (go.Scatter3d, optional): The existing quiver figure, if any.
+        vminmax (tuple, optional): The minimum and maximum values for the colorbar.
+    
+    Returns
+    -------
+        tuple: The updated edge trace, node trace, and quiver figure.
+    """
+    
     if edge_trace is None:
         edge_trace = go.Scatter3d(x=[], y=[], z=[], line=dict(width=1,color='#888'), 
                                 hoverinfo='none', mode='lines')

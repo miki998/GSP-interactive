@@ -1,7 +1,27 @@
 from .processes import *
 
-def graph_analysis(A, signal, type='GFT-Laplacian'):
-
+def graph_analysis(A:np.ndarray, signal:np.ndarray, type:str='GFT-Laplacian'):
+    """
+    Generate a signal through various projections.
+    
+    Parameters
+    ----------
+    A : np.ndarray
+        The input graph adjacency matrix.
+    signal : np.ndarray
+        The input signal.
+    type : str, optional
+        The type of projection to use, by default 'GFT-Laplacian'.
+    
+    Returns
+    -------
+    U : np.ndarray
+        The projection basis.
+    coefs : np.ndarray
+        The signal coefficients in the projection basis.
+    V : np.ndarray
+        The projection basis for the dual space.
+    """
     if type == 'GFT-Laplacian':
         L, U, V, Uinv, _, _, _ = graph_utils.prep_transform(A, gso="laplacian")
         if len(signal.shape) > 1:

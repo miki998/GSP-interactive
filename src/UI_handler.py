@@ -1,8 +1,46 @@
 from .processes import *
 from .numerical_handler import graph_analysis
-import streamlit as st
 
-def ui_box(G, A, signal, pos, prepare_trace):
+import streamlit as st
+import plotly.graph_objs as go
+
+def ui_box(G:nx.Graph, A:np.ndarray, signal:np.ndarray, pos:dict, prepare_trace:go.Scatter):
+    """
+    Instantiates UI boxes for the user to interact with, allowing them to choose a network layout, basis projection, and eigenmode to visualize.
+    
+    Parameters
+    ----------
+    G : nx.Graph
+        The graph object.
+    A : np.ndarray
+        The adjacency matrix of the graph.
+    signal : np.ndarray
+        The signal associated with the graph.
+    pos : dict
+        The positions of the nodes in the graph.
+    prepare_trace : go.Scatter
+        A function to prepare the trace for the graph visualization.
+    
+    Returns
+    -------
+    G : nx.Graph
+        The updated graph object with the selected layout.
+    U : np.ndarray
+        The basis projection matrix.
+    mags : np.ndarray
+        The magnitudes of the signal in the chosen basis.
+    freqs : np.ndarray
+        The frequencies of the signal in the chosen basis.
+    eigenmode_idx : int
+        The index of the selected eigenmode.
+    edge_trace_template : go.Scatter
+        The template for the edge trace.
+    node_trace_template : go.Scatter
+        The template for the node trace.
+    quiver_template : go.Scatter
+        The template for the quiver trace.
+    """
+
     #Create three input widgets that allow users to specify their preferred layout and color schemes
     col1, col2, col3 = st.columns( [1, 1, 1])
     with col1:
